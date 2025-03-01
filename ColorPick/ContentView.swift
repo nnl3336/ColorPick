@@ -30,11 +30,11 @@ class ColorSelectionViewModel: ObservableObject {
     @Published var selectedCircleIndex: Int? = nil
     
     private let viewContext: NSManagedObjectContext
-    private var storedPatterns: [ColorPatternEntity] = []  // 修正: 配列に変更
+    private var storedPatterns: [ColorPatternEntity] = []
     
     init(viewContext: NSManagedObjectContext) {
         self.viewContext = viewContext
-        loadPattern()  // `storedPatterns` を `loadPattern` 内で取得
+        loadPattern()
     }
     
     func savePattern() {
@@ -45,7 +45,7 @@ class ColorSelectionViewModel: ObservableObject {
             let newEntity = ColorPatternEntity(context: viewContext)
             newEntity.selectedPattern = selectedPattern.rawValue
             newEntity.selectedCircleIndex = Int16(selectedCircleIndex ?? -1)
-            storedPatterns.append(newEntity)  // 配列に追加
+            storedPatterns.append(newEntity)
         }
         
         try? viewContext.save()
@@ -63,19 +63,39 @@ class ColorSelectionViewModel: ObservableObject {
             selectedCircleIndex = savedIndex >= 0 ? savedIndex : nil
         }
     }
+    
+    /// 選択中の色を取得
+    var selectedColor: Color? {
+        guard let index = selectedCircleIndex, index < selectedPattern.colors.count else {
+            return nil
+        }
+        return selectedPattern.colors[index]
+    }
 }
 
-// 2. ContentView で ViewModel を使う
+// MARK: - SwiftUI View
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject private var viewModel: ColorSelectionViewModel
-    
     /*init(viewContext: NSManagedObjectContext) {
         _viewModel = StateObject(wrappedValue: ColorSelectionViewModel(viewContext: viewContext))
     }*/
     
     var body: some View {
         VStack {
+            // 選択された色を表示
+            if let selectedColor = viewModel.selectedColor {
+                Text("選択中の色")
+                    .foregroundColor(selectedColor)
+                    .bold()
+                    .padding()
+            } else {
+                Text("色が選択されていません")
+                    .foregroundColor(.gray)
+                    .italic()
+                    .padding()
+            }
+            
             // Pickerでパターン選択
             Picker("パターンを選択", selection: $viewModel.selectedPattern) {
                 ForEach(ColorPattern.allCases) { pattern in
@@ -106,6 +126,8 @@ struct ContentView: View {
         }
     }
 }
+
+// 2. ContentView で ViewModel を使う
 
 // 4. Color のランダム拡張
 extension Color {
