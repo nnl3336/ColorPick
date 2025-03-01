@@ -25,66 +25,85 @@ enum ColorPattern: String, CaseIterable, Identifiable {
     }
 }
 
+class ColorSelectionViewModel: ObservableObject {
+    @Published var selectedPattern: ColorPattern = .pattern1
+    @Published var selectedCircleIndex: Int? = nil
+    
+    private let viewContext: NSManagedObjectContext
+    private var storedPatterns: [ColorPatternEntity] = []  // 修正: 配列に変更
+    
+    init(viewContext: NSManagedObjectContext) {
+        self.viewContext = viewContext
+        loadPattern()  // `storedPatterns` を `loadPattern` 内で取得
+    }
+    
+    func savePattern() {
+        if let entity = storedPatterns.first {
+            entity.selectedPattern = selectedPattern.rawValue
+            entity.selectedCircleIndex = Int16(selectedCircleIndex ?? -1)
+        } else {
+            let newEntity = ColorPatternEntity(context: viewContext)
+            newEntity.selectedPattern = selectedPattern.rawValue
+            newEntity.selectedCircleIndex = Int16(selectedCircleIndex ?? -1)
+            storedPatterns.append(newEntity)  // 配列に追加
+        }
+        
+        try? viewContext.save()
+    }
+    
+    func loadPattern() {
+        let fetchRequest: NSFetchRequest<ColorPatternEntity> = ColorPatternEntity.fetchRequest()
+        if let results = try? viewContext.fetch(fetchRequest) {
+            storedPatterns = results
+            if let savedPattern = results.first?.selectedPattern,
+               let pattern = ColorPattern(rawValue: savedPattern) {
+                selectedPattern = pattern
+            }
+            let savedIndex = Int(results.first?.selectedCircleIndex ?? -1)
+            selectedCircleIndex = savedIndex >= 0 ? savedIndex : nil
+        }
+    }
+}
+
+// 2. ContentView で ViewModel を使う
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @FetchRequest(entity: ColorPatternEntity.entity(), sortDescriptors: [])
-    private var storedPatterns: FetchedResults<ColorPatternEntity>
+    @StateObject private var viewModel: ColorSelectionViewModel
     
-    @State private var selectedPattern: ColorPattern = .pattern1
-    @State private var selectedCircleIndex: Int? = nil
+    init(viewContext: NSManagedObjectContext) {
+        _viewModel = StateObject(wrappedValue: ColorSelectionViewModel(viewContext: viewContext))
+    }
     
     var body: some View {
         VStack {
             // Pickerでパターン選択
-            Picker("パターンを選択", selection: $selectedPattern) {
+            Picker("パターンを選択", selection: $viewModel.selectedPattern) {
                 ForEach(ColorPattern.allCases) { pattern in
                     Text(pattern.rawValue.capitalized).tag(pattern)
                 }
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding()
-            .onChange(of: selectedPattern) { newValue in
-                savePattern(newValue, selectedCircleIndex)
+            .onChange(of: viewModel.selectedPattern) { _ in
+                viewModel.savePattern()
             }
             
             // Circle を表示
             HStack {
-                ForEach(selectedPattern.colors.indices, id: \.self) { index in
+                ForEach(viewModel.selectedPattern.colors.indices, id: \.self) { index in
                     Circle()
-                        .fill(selectedPattern.colors[index])
+                        .fill(viewModel.selectedPattern.colors[index])
                         .frame(width: 50, height: 50)
                         .overlay(
-                            Circle().stroke(selectedCircleIndex == index ? Color.black : Color.clear, lineWidth: 3)
+                            Circle().stroke(viewModel.selectedCircleIndex == index ? Color.black : Color.clear, lineWidth: 3)
                         )
                         .onTapGesture {
-                            selectedCircleIndex = (selectedCircleIndex == index) ? nil : index
-                            savePattern(selectedPattern, selectedCircleIndex)
+                            viewModel.selectedCircleIndex = (viewModel.selectedCircleIndex == index) ? nil : index
+                            viewModel.savePattern()
                         }
                 }
             }
         }
-        .onAppear {
-            loadPattern()
-        }
-    }
-    
-    // 2. Core Data に保存（パターンと選択インデックス）
-    private func savePattern(_ pattern: ColorPattern, _ index: Int?) {
-        let entity = storedPatterns.first ?? ColorPatternEntity(context: viewContext)
-        entity.selectedPattern = pattern.rawValue
-        entity.selectedCircleIndex = Int16(index ?? -1)  // -1 は未選択の意味
-        try? viewContext.save()
-    }
-    
-    // 3. Core Data からロード
-    private func loadPattern() {
-        if let savedPattern = storedPatterns.first?.selectedPattern,
-           let pattern = ColorPattern(rawValue: savedPattern) {
-            selectedPattern = pattern
-        }
-        
-        let savedIndex = Int(storedPatterns.first?.selectedCircleIndex ?? -1)
-        selectedCircleIndex = savedIndex >= 0 ? savedIndex : nil
     }
 }
 
