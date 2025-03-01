@@ -8,46 +8,81 @@
 import SwiftUI
 import CoreData
 
-struct ContentView: View {
-    let colorPatterns: [[Color]] = [
-        [.red, .blue, .yellow, .green, .pink],  // パターン1
-        [.blue, .yellow, .green, .pink, .red],  // パターン2
-        [.yellow, .green, .pink, .red, .blue],  // パターン3
-        [.green, .pink, .red, .blue, .yellow],  // パターン4
-        [.pink, .red, .blue, .yellow, .green],  // パターン5
-    ]
+// 1. Enum を定義
+enum ColorPattern: String, CaseIterable, Identifiable {
+    case pattern1, pattern2, pattern3, pattern4, pattern5, random
+    var id: String { self.rawValue }
     
-    @State private var selectedPattern = 0
-    
-    var currentColors: [Color] {
-        if selectedPattern == 5 {
-            return (0..<5).map { _ in Color.random }
-        } else {
-            return colorPatterns[selectedPattern]
-        }
-    }
-    
-    var body: some View {
-        VStack {
-            Picker("パターンを選択", selection: $selectedPattern) {
-                ForEach(0..<6, id: \.self) { index in
-                    Text("パターン \(index + 1)").tag(index)
-                }
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding()
-            
-            HStack {
-                ForEach(currentColors, id: \.self) { color in
-                    Circle()
-                        .fill(color)
-                        .frame(width: 50, height: 50)
-                }
-            }
+    var colors: [Color] {
+        switch self {
+        case .pattern1: return [.red, .blue, .yellow, .green, .pink]
+        case .pattern2: return [.blue, .yellow, .green, .pink, .red]
+        case .pattern3: return [.yellow, .green, .pink, .red, .blue]
+        case .pattern4: return [.green, .pink, .red, .blue, .yellow]
+        case .pattern5: return [.pink, .red, .blue, .yellow, .green]
+        case .random: return (0..<5).map { _ in Color.random }
         }
     }
 }
 
+struct ContentView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    @FetchRequest(entity: ColorPatternEntity.entity(), sortDescriptors: [])
+    private var storedPatterns: FetchedResults<ColorPatternEntity>
+    
+    @State private var selectedPattern: ColorPattern = .pattern1
+    @State private var selectedCircleIndex: Int? = nil
+    
+    var body: some View {
+        VStack {
+            // Pickerでパターン選択
+            Picker("パターンを選択", selection: $selectedPattern) {
+                ForEach(ColorPattern.allCases) { pattern in
+                    Text(pattern.rawValue.capitalized).tag(pattern)
+                }
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding()
+            .onChange(of: selectedPattern) { newValue in
+                savePattern(newValue)
+            }
+            
+            // Circle を表示
+            HStack {
+                ForEach(selectedPattern.colors.indices, id: \.self) { index in
+                    Circle()
+                        .fill(selectedPattern.colors[index])
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Circle().stroke(selectedCircleIndex == index ? Color.black : Color.clear, lineWidth: 3)
+                        )
+                        .onTapGesture {
+                            selectedCircleIndex = (selectedCircleIndex == index) ? nil : index
+                        }
+                }
+            }
+        }
+        .onAppear {
+            loadPattern()
+        }
+    }
+    
+    // 2. Core Data に保存
+    private func savePattern(_ pattern: ColorPattern) {
+        let entity = storedPatterns.first ?? ColorPatternEntity(context: viewContext)
+        entity.selectedPattern = pattern.rawValue
+        try? viewContext.save()
+    }
+    
+    // 3. Core Data からロード
+    private func loadPattern() {
+        if let savedPattern = storedPatterns.first?.selectedPattern, let pattern = ColorPattern(rawValue: savedPattern) {
+            selectedPattern = pattern
+        }
+    }
+}
+
+// 4. Color のランダム拡張
 extension Color {
     static var random: Color {
         Color(
