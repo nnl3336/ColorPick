@@ -68,11 +68,11 @@ class ColorSelectionViewModel: ObservableObject {
 // 2. ContentView で ViewModel を使う
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var viewModel: ColorSelectionViewModel
+    @EnvironmentObject private var viewModel: ColorSelectionViewModel
     
-    init(viewContext: NSManagedObjectContext) {
+    /*init(viewContext: NSManagedObjectContext) {
         _viewModel = StateObject(wrappedValue: ColorSelectionViewModel(viewContext: viewContext))
-    }
+    }*/
     
     var body: some View {
         VStack {
