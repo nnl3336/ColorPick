@@ -44,7 +44,7 @@ struct ContentView: View {
             .pickerStyle(SegmentedPickerStyle())
             .padding()
             .onChange(of: selectedPattern) { newValue in
-                savePattern(newValue)
+                savePattern(newValue, selectedCircleIndex)
             }
             
             // Circle を表示
@@ -58,6 +58,7 @@ struct ContentView: View {
                         )
                         .onTapGesture {
                             selectedCircleIndex = (selectedCircleIndex == index) ? nil : index
+                            savePattern(selectedPattern, selectedCircleIndex)
                         }
                 }
             }
@@ -67,18 +68,23 @@ struct ContentView: View {
         }
     }
     
-    // 2. Core Data に保存
-    private func savePattern(_ pattern: ColorPattern) {
+    // 2. Core Data に保存（パターンと選択インデックス）
+    private func savePattern(_ pattern: ColorPattern, _ index: Int?) {
         let entity = storedPatterns.first ?? ColorPatternEntity(context: viewContext)
         entity.selectedPattern = pattern.rawValue
+        entity.selectedCircleIndex = Int16(index ?? -1)  // -1 は未選択の意味
         try? viewContext.save()
     }
     
     // 3. Core Data からロード
     private func loadPattern() {
-        if let savedPattern = storedPatterns.first?.selectedPattern, let pattern = ColorPattern(rawValue: savedPattern) {
+        if let savedPattern = storedPatterns.first?.selectedPattern,
+           let pattern = ColorPattern(rawValue: savedPattern) {
             selectedPattern = pattern
         }
+        
+        let savedIndex = Int(storedPatterns.first?.selectedCircleIndex ?? -1)
+        selectedCircleIndex = savedIndex >= 0 ? savedIndex : nil
     }
 }
 
